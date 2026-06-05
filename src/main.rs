@@ -40,11 +40,15 @@ fn main() {
         let word = u32::from_le_bytes(cpu.mem.read_word(cpu.pc));
         let opcode: u8 = word as u8 & 0b01111111;
         let iimm = (word as i32 >> 20) as i32;
+        let iimmf = (word >> 20);
         let rs1 = ((word >> 15) & 0b11111) as usize;
         let rs2 = ((word >> 20) & 0b11111) as usize;
         let funct3 = ((word >> 12) & 0b111) as u8;
         let funct7 = ((word >> 25) & 0b1111111) as u8;
+        let funct6 = ((word >> 26) & 0b111111) as u8;
+        let uimm = ((word >> 20) & 0b111111) as u8;
         let rd = ((word >> 7) & 0b11111) as usize;
+        let imm20 = word >> 12;
         match opcode {
             0b0010011 => {
                 //OP-IMM
@@ -65,18 +69,96 @@ fn main() {
                         //SLTIU
                         cpu.regs[rd] = if (cpu.regs[rs1]) < iimm as u64 { 1 } else { 0 };
                     }
+                    0b111 => {
+                        //ANDI
+                        cpu.regs[rd] = cpu.regs[rs1] & iimmf as u64;
+                    }
+                    0b110 => {
+                        //ORI
+                        cpu.regs[rd] = cpu.regs[rs1] | iimmf as u64;
+                    }
+                    0b001 => {
+                        //SLLI
+                        match funct6 {
+                            0b000000 => {
+                                cpu.regs[rd] = cpu.regs[rs1] << uimm;
+                            }
+                            _ => unimplemented!(),
+                        }
+                    }
+                    0b101 => {
+                        match funct6 {
+                            0b000000 => {
+                                //SRLI
+                                cpu.regs[rd] = cpu.regs[rs1] >> uimm;
+                            }
+                            0b010000 => {
+                                //SRAI
+                                cpu.regs[rd] = (cpu.regs[rs1] as i64 >> uimm) as u64;
+                            }
+                            _ => unimplemented!(),
+                        }
+                    }
+                    0b100 => {
+                        //XORI
+                        cpu.regs[rd] = cpu.regs[rs1] ^ iimmf as u64
+                    }
                     _ => unimplemented!(),
                 }
             }
             0b0110011 => {
                 //OP
                 match (funct3, funct7) {
-                    (0b000, 0b000000) => {
+                    (0b000, 0b0000000) => {
                         //ADD
                         cpu.regs[rd] = cpu.regs[rs1].wrapping_add(cpu.regs[rs2]);
                     }
+                    (0b000, 0b0100000) => {
+                        //SUB
+                        cpu.regs[rd] = cpu.regs[rs1].wrapping_sub(cpu.regs[rs2]);
+                    }
+                    (0b001, 0b0000000) => {
+                        //SLL
+                        cpu.regs[rd] = cpu.regs[rs1] << cpu.regs[rs2];
+                    }
+                    (0b010, 0b0000000) => {
+                        //SLT
+                        cpu.regs[rd] = if (cpu.regs[rs1] as i64) < (cpu.regs[rs2] as i64) {
+                            1
+                        } else {
+                            0
+                        };
+                    }
+                    (0b011, 0b0000000) => {
+                        //SLTU
+                        cpu.regs[rd] = if cpu.regs[rs1] < cpu.regs[rs2] { 1 } else { 0 };
+                    }
+                    (0b100, 0b0000000) => {
+                        //XOR
+                        cpu.regs[rd] = cpu.regs[rs1] ^ cpu.regs[rs2];
+                    }
+                    (0b101, 0b0000000) => {
+                        //SRL
+                        cpu.regs[rd] = cpu.regs[rs1] >> cpu.regs[rs2];
+                    }
+                    (0b101, 0b0100000) => {
+                        //SRA
+                        cpu.regs[rd] = (cpu.regs[rs1] as i64 >> cpu.regs[rs2]) as u64;
+                    }
+                    (0b110, 0b0000000) => {
+                        //OR
+                        cpu.regs[rd] = cpu.regs[rs1] | cpu.regs[rs2];
+                    }
+                    (0b111, 0b0000000) => {
+                        //AND
+                        cpu.regs[rd] = cpu.regs[rs1] & cpu.regs[rs2];
+                    }
+
                     _ => unimplemented!(),
                 }
+            }
+            0b0110111 => {
+                cpu.regs[rd] = (imm20 << 12) as u64;
             }
 
             0 => {
